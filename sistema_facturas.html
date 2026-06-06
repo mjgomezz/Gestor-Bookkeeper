@@ -6,7 +6,96 @@
 <title>Sistema de Facturas — Maria Jose Gomez</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script type="module">
+// ══════════════════════════════════════════════
+//  FIREBASE CONFIG
+// ══════════════════════════════════════════════
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDyGHKUWoBJlNkA6h6v_Q2MmtVoOQ7sWHk",
+  authDomain: "gestor-bookkeeper.firebaseapp.com",
+  projectId: "gestor-bookkeeper",
+  storageBucket: "gestor-bookkeeper.firebasestorage.app",
+  messagingSenderId: "969567848438",
+  appId: "1:969567848438:web:9bd0b48610d5e969a969d7"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+// ── Cargar facturas desde Firebase al iniciar ──
+async function loadFromFirebase() {
+  try {
+    showFirebaseStatus('⏳ Cargando datos...', 'loading');
+    const snap = await getDocs(collection(db, 'invoices'));
+    invoices = snap.docs.map(d => ({ ...d.data(), _docId: d.id }));
+    // Cargar apiKey guardada
+    try {
+      const cfgSnap = await getDocs(collection(db, 'config'));
+      cfgSnap.docs.forEach(d => {
+        if (d.id === 'apiKey' && d.data().value) {
+          apiKey = d.data().value;
+          updateKeyStatus();
+        }
+      });
+    } catch(e) {}
+    document.getElementById('load-notice').style.display = 'none';
+    renderGestor();
+    showFirebaseStatus('✅ Datos cargados', 'ok');
+    setTimeout(() => hideFirebaseStatus(), 2500);
+  } catch(e) {
+    showFirebaseStatus('⚠️ Error conectando a Firebase', 'error');
+    console.error(e);
+  }
+}
+
+// ── Guardar factura en Firebase ──
+window.saveInvoiceToFirebase = async function(inv) {
+  try {
+    const data = { ...inv };
+    delete data._docId;
+    if (inv._docId) {
+      await setDoc(doc(db, 'invoices', inv._docId), data);
+    } else {
+      const ref = await addDoc(collection(db, 'invoices'), data);
+      inv._docId = ref.id;
+    }
+  } catch(e) { console.error('Error guardando en Firebase:', e); }
+};
+
+// ── Eliminar factura de Firebase ──
+window.deleteInvoiceFromFirebase = async function(docId) {
+  if (!docId) return;
+  try { await deleteDoc(doc(db, 'invoices', docId)); } catch(e) { console.error(e); }
+};
+
+// ── Guardar apiKey en Firebase ──
+window.saveApiKeyToFirebase = async function(key) {
+  try { await setDoc(doc(db, 'config', 'apiKey'), { value: key }); } catch(e) { console.error(e); }
+};
+
+function showFirebaseStatus(msg, type) {
+  let el = document.getElementById('fb-status');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.display = 'block';
+  el.className = 'fb-status ' + type;
+}
+function hideFirebaseStatus() {
+  const el = document.getElementById('fb-status');
+  if (el) el.style.display = 'none';
+}
+
+// Iniciar carga cuando el DOM esté listo
+document.addEventListener('DOMContentLoaded', () => loadFromFirebase());
+</script>
 <style>
+.fb-status { display:none; font-size:12px; padding:6px 28px; }
+.fb-status.loading { background:#fff8e1; color:#7a5c00; }
+.fb-status.ok { background:#e8f5ee; color:#1a5f3f; }
+.fb-status.error { background:#fdecea; color:#c0392b; }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: Arial, sans-serif; background: #f4f6f4; color: #222; min-height: 100vh; }
 
@@ -206,20 +295,17 @@ tbody td:last-child { text-align: center; }
   <div class="topbar-right">
     <button class="key-btn" onclick="openKeyModal()">🔑 API Key</button>
     <button class="tb-btn outline" onclick="openUpload()">📂 Subir PDFs</button>
-    <button class="tb-btn outline" onclick="importJSONPrompt()">📂 Cargar datos</button>
-    <button class="tb-btn" onclick="exportJSON()">💾 Guardar datos</button>
+    <div id="fb-status" class="fb-status"></div>
   </div>
 </div>
 
 <!-- ══ GESTOR PAGE ══ -->
 <div class="page active" id="page-gestor">
-  <div class="notice notice-info" id="load-notice">
-    <span>💡 Cargá tu archivo <b>facturas.json</b> para ver tus facturas guardadas.</span>
-    <button class="notice-btn" onclick="importJSONPrompt()">📂 Cargar datos</button>
+  <div class="notice notice-info" id="load-notice" style="display:none">
+    <span>⏳ Conectando con Firebase...</span>
   </div>
   <div class="notice" id="save-notice" style="display:none">
     <span>⚠️ <b>Cambios sin guardar.</b></span>
-    <button class="notice-btn" onclick="exportJSON()">💾 Guardar datos</button>
   </div>
   <input type="file" id="json-file-input" accept=".json" style="display:none">
 
@@ -421,14 +507,13 @@ function showPage(name) {
 }
 
 // ══════════════════════════════════════════════
-//  PERSISTENCE
+//  PERSISTENCE — Firebase
 // ══════════════════════════════════════════════
-function markDirty() { dirty=true; document.getElementById('save-notice').style.display='flex'; }
+function markDirty() { dirty=true; }
 
 function exportJSON() {
   const blob = new Blob([JSON.stringify({invoices,apiKey},null,2)],{type:'application/json'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='facturas.json'; a.click();
-  dirty=false; document.getElementById('save-notice').style.display='none';
 }
 function importJSONPrompt() { document.getElementById('json-file-input').click(); }
 document.getElementById('json-file-input').addEventListener('change', function(){
@@ -439,7 +524,6 @@ document.getElementById('json-file-input').addEventListener('change', function()
       const data=JSON.parse(e.target.result);
       if(Array.isArray(data)){invoices=data;}
       else{invoices=data.invoices||[];if(data.apiKey){apiKey=data.apiKey;updateKeyStatus();}}
-      document.getElementById('load-notice').style.display='none';
       renderGestor();
     } catch(err){alert('Error al leer el archivo: '+err.message);}
   };
@@ -453,7 +537,9 @@ function getKey(){return apiKey||'';}
 function saveKey(){
   const val=document.getElementById('key-input').value.trim();
   if(!val.startsWith('sk-ant-')){alert('La key debe empezar con sk-ant-');return;}
-  apiKey=val; updateKeyStatus(); markDirty(); closeKeyModal();
+  apiKey=val; updateKeyStatus();
+  if(window.saveApiKeyToFirebase) saveApiKeyToFirebase(val);
+  closeKeyModal();
 }
 function updateKeyStatus(){
   const k=getKey(),el=document.getElementById('key-current');
@@ -512,8 +598,8 @@ async function generateAndSave(){
     const rate=facRows.map(r=>r.rate).filter(Boolean)[0]||'30';
     const desc=facRows.map(r=>buildDesc(r)).join(' / ');
     const rec={id:Date.now(),num,date:iso,client,desc,hours,rate,total:parseNum(total.replace('$','')),status:'pending',pdf:pdfBase64};
-    if(!invoices.find(i=>i.num===num)){invoices.push(rec);}
-    else{const ex=invoices.find(i=>i.num===num);ex.pdf=pdfBase64;}
+    if(!invoices.find(i=>i.num===num)){invoices.push(rec);if(window.saveInvoiceToFirebase)saveInvoiceToFirebase(rec);}
+    else{const ex=invoices.find(i=>i.num===num);ex.pdf=pdfBase64;if(window.saveInvoiceToFirebase)saveInvoiceToFirebase(ex);}
     markDirty(); renderGestor();
     // Show last box
     document.getElementById('last-box').style.display='block';
@@ -552,8 +638,8 @@ function viewPDF(id){
   win.document.close();
 }
 
-function toggleStatus(id){const inv=invoices.find(i=>i.id===id);if(!inv)return;inv.status=inv.status==='paid'?'pending':'paid';markDirty();renderGestor();}
-function deleteInvoice(id){if(!confirm('¿Eliminar esta factura?'))return;invoices=invoices.filter(i=>i.id!==id);markDirty();renderGestor();}
+function toggleStatus(id){const inv=invoices.find(i=>i.id===id);if(!inv)return;inv.status=inv.status==='paid'?'pending':'paid';if(window.saveInvoiceToFirebase)saveInvoiceToFirebase(inv);markDirty();renderGestor();}
+function deleteInvoice(id){if(!confirm('¿Eliminar esta factura?'))return;const inv=invoices.find(i=>i.id===id);if(inv&&window.deleteInvoiceFromFirebase)deleteInvoiceFromFirebase(inv._docId);invoices=invoices.filter(i=>i.id!==id);markDirty();renderGestor();}
 function editInvoice(id){const inv=invoices.find(i=>i.id===id);if(inv)openModal(inv);}
 function resetFilters(){document.getElementById('fil-client').value='';document.getElementById('fil-status').value='';document.getElementById('fil-from').value='';document.getElementById('fil-to').value='';activeMonth=null;renderGestor();}
 
@@ -675,10 +761,12 @@ function saveInvoice(){
   const hours=document.getElementById('m-hours').value,rate=document.getElementById('m-rate').value;
   const total=parseNum(hours)*parseNum(rate)||parseNum(document.getElementById('m-total').value.replace('$',''));
   const rec={num,date,client:document.getElementById('m-client').value.trim(),desc:document.getElementById('m-desc').value.trim(),hours,rate,total,status:document.getElementById('m-status').value};
-  if(editingId){const inv=invoices.find(i=>i.id===editingId);if(inv)Object.assign(inv,rec);}
+  if(editingId){const inv=invoices.find(i=>i.id===editingId);if(inv){Object.assign(inv,rec);if(window.saveInvoiceToFirebase)saveInvoiceToFirebase(inv);}}
   else{
     const qitem=pendingQueueId?uploadQueue.find(i=>String(i.id)===String(pendingQueueId)):null;
-    invoices.push({id:Date.now(),...rec,pdf:qitem&&qitem.pdfBase64?qitem.pdfBase64:''});
+    const newInv={id:Date.now(),...rec,pdf:qitem&&qitem.pdfBase64?qitem.pdfBase64:''};
+    invoices.push(newInv);
+    if(window.saveInvoiceToFirebase)saveInvoiceToFirebase(newInv);
   }
   if(pendingQueueId){
     const item=uploadQueue.find(i=>String(i.id)===String(pendingQueueId));
@@ -765,7 +853,9 @@ function saveAllReady(){
   uploadQueue.filter(i=>i.status==='ready').forEach(item=>{
     const p=item.parsed;
     const h=parseNum(p.hours),r=parseNum(p.rate||'30'),total=parseNum(p.total)||h*r;
-    invoices.push({id:Date.now()+Math.random(),num:p.num||'',date:p.date||'',client:p.client||'',desc:p.desc||'',hours:p.hours||'',rate:p.rate||'30',total,status:'pending',pdf:item.pdfBase64||''});
+    const newInv={id:Date.now()+Math.random(),num:p.num||'',date:p.date||'',client:p.client||'',desc:p.desc||'',hours:p.hours||'',rate:p.rate||'30',total,status:'pending',pdf:item.pdfBase64||''};
+    invoices.push(newInv);
+    if(window.saveInvoiceToFirebase)saveInvoiceToFirebase(newInv);
     const s=document.getElementById('uqs-'+item.id);if(s){s.className='uq-status saved';s.textContent='✅ Guardada';}
     const b=document.getElementById('uqb-'+item.id);if(b)b.style.display='none';
     item.status='saved';
