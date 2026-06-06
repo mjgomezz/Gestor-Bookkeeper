@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sistema de Facturas — Maria Jose Gomez</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: Arial, sans-serif; background: #f4f6f4; color: #222; min-height: 100vh; }
+
+/* ── TOP BAR ── */
+.topbar { background: #1a5f3f; color: white; padding: 0 28px; display: flex; align-items: stretch; justify-content: space-between; }
+.topbar-left { display: flex; align-items: stretch; gap: 0; }
+.topbar-brand { padding: 14px 20px 14px 0; }
+.topbar-brand h1 { font-size: 17px; font-weight: 600; }
+.topbar-brand .sub { font-size: 11px; opacity: 0.7; margin-top: 1px; }
+.tab { padding: 0 22px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; background: transparent; color: rgba(255,255,255,0.7); border-bottom: 3px solid transparent; display: flex; align-items: center; transition: all 0.15s; }
+.tab:hover { color: white; background: rgba(255,255,255,0.08); }
+.tab.active { color: white; border-bottom-color: white; }
+.topbar-right { display: flex; align-items: center; gap: 10px; }
+.key-btn { background: transparent; color: rgba(255,255,255,0.75); border: none; font-size: 12px; cursor: pointer; text-decoration: underline; }
+.tb-btn { background: white; color: #1a5f3f; border: none; border-radius: 8px; padding: 7px 14px; font-size: 12px; font-weight: 600; cursor: pointer; }
+.tb-btn:hover { background: #e8f5ee; }
+.tb-btn.outline { background: transparent; color: white; border: 1.5px solid rgba(255,255,255,0.55); }
+.tb-btn.outline:hover { background: rgba(255,255,255,0.1); }
+
+/* ── PAGES ── */
+.page { display: none; }
+.page.active { display: block; }
+
+/* ══════════════════════════════════════════════
+   GESTOR PAGE
+══════════════════════════════════════════════ */
+.notice { background: #fff8e1; border: 1px solid #ffe082; color: #7a5c00; font-size: 12px; padding: 9px 28px; display: flex; align-items: center; gap: 10px; }
+.notice b { font-weight: 600; }
+.notice-btn { background: #1a5f3f; color: white; border: none; border-radius: 6px; padding: 4px 12px; font-size: 12px; cursor: pointer; font-family: Arial, sans-serif; white-space: nowrap; }
+.notice-btn.grey { background: #555; }
+.notice-info { background: #e8f5ee; border-color: #a8d5b8; color: #1a5f3f; }
+
+.summary { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; padding: 18px 28px 0; }
+.card { background: white; border-radius: 12px; padding: 14px 18px; border: 0.5px solid #dde8e2; }
+.card .c-label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; }
+.card .c-value { font-size: 21px; font-weight: 700; color: #1a5f3f; }
+.card .c-sub { font-size: 11px; color: #aaa; margin-top: 2px; }
+.card.warn .c-value { color: #c0622a; }
+.card.neutral .c-value { color: #444; }
+
+.filters { display: flex; gap: 10px; padding: 14px 28px; align-items: flex-end; flex-wrap: wrap; }
+.filters label { font-size: 11px; color: #777; display: block; margin-bottom: 3px; }
+.filters input, .filters select { font-size: 12px; padding: 6px 10px; border: 0.5px solid #ccc; border-radius: 8px; background: white; color: #222; font-family: Arial, sans-serif; }
+.filters input[type=date] { width: 130px; }
+.filter-reset { font-size: 12px; color: #888; background: none; border: none; cursor: pointer; text-decoration: underline; align-self: flex-end; padding-bottom: 6px; }
+
+.month-section { padding: 0 28px 10px; }
+.month-section h2 { font-size: 12px; color: #666; margin-bottom: 7px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.month-grid { display: flex; gap: 8px; flex-wrap: wrap; }
+.month-pill { background: white; border: 0.5px solid #dde8e2; border-radius: 20px; padding: 4px 13px; font-size: 12px; color: #444; cursor: pointer; font-family: Arial, sans-serif; }
+.month-pill.active { background: #1a5f3f; color: white; border-color: #1a5f3f; }
+.month-pill:hover:not(.active) { background: #e8f5ee; }
+
+.table-wrap { padding: 10px 28px 40px; }
+table { width: 100%; border-collapse: collapse; background: white; border-radius: 12px; overflow: hidden; border: 0.5px solid #dde8e2; }
+thead th { background: #1a5f3f; color: white; padding: 10px 12px; text-align: left; font-size: 12px; font-weight: normal; text-transform: uppercase; letter-spacing: 0.04em; cursor: pointer; user-select: none; white-space: nowrap; }
+thead th:nth-child(4), thead th:nth-child(5), thead th:nth-child(6) { text-align: right; }
+thead th.no-sort { cursor: default; }
+thead th:last-child { text-align: center; cursor: default; }
+tbody tr { border-bottom: 0.5px solid #eef2ef; }
+tbody tr:last-child { border-bottom: none; }
+tbody tr:hover { background: #f7fbf8; }
+tbody td { padding: 9px 12px; font-size: 13px; vertical-align: middle; }
+tbody td:nth-child(4), tbody td:nth-child(5), tbody td:nth-child(6) { text-align: right; }
+tbody td:last-child { text-align: center; }
+.empty-row td { text-align: center; color: #aaa; font-size: 13px; padding: 40px; }
+
+.badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; cursor: pointer; user-select: none; }
+.badge.paid { background: #e8f5ee; color: #1a5f3f; }
+.badge.pending { background: #fef3ec; color: #c0622a; }
+
+.actions { display: flex; gap: 5px; justify-content: center; }
+.act-btn { background: none; border: 0.5px solid #ccc; border-radius: 6px; padding: 4px 8px; font-size: 11px; cursor: pointer; color: #555; font-family: Arial, sans-serif; white-space: nowrap; }
+.act-btn:hover { background: #f0f0f0; }
+.act-btn.del:hover { background: #fdecea; color: #c0392b; border-color: #f5c0bc; }
+.act-btn.view { border-color: #1a5f3f; color: #1a5f3f; }
+.act-btn.view:hover { background: #e8f5ee; }
+
+/* ══════════════════════════════════════════════
+   FACTURADOR PAGE
+══════════════════════════════════════════════ */
+.fac-wrap { display: flex; gap: 24px; padding: 20px 28px; max-width: 1300px; }
+.fac-panel { width: 310px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; }
+.fac-section { background: #efefef; border: 0.5px solid #ddd; border-radius: 12px; padding: 12px; }
+.fac-section h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #777; margin-bottom: 10px; font-weight: 500; }
+.f-field { margin-bottom: 8px; }
+.f-field:last-child { margin-bottom: 0; }
+.f-field label { display: block; font-size: 11px; color: #777; margin-bottom: 3px; }
+.f-field input { width: 100%; font-size: 12px; padding: 5px 8px; border: 0.5px solid #ccc; border-radius: 8px; background: white; color: #222; font-family: Arial, sans-serif; }
+.service-row { background: white; border: 0.5px solid #ddd; border-radius: 8px; padding: 10px; margin-bottom: 8px; position: relative; }
+.service-row:last-child { margin-bottom: 0; }
+.srow-remove { position: absolute; top: 8px; right: 8px; background: none; border: none; cursor: pointer; color: #999; font-size: 15px; line-height: 1; padding: 0; }
+.date-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 6px; }
+.date-group label { font-size: 10px; color: #777; display: block; margin-bottom: 2px; }
+.date-inner { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.date-inner select { font-size: 11px; padding: 4px; border: 0.5px solid #ccc; border-radius: 4px; background: white; color: #222; font-family: Arial, sans-serif; width: 100%; }
+.nums-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-top: 6px; }
+.nums-row label { font-size: 10px; color: #777; display: block; margin-bottom: 2px; }
+.nums-row input { font-size: 12px; padding: 4px 6px; border: 0.5px solid #ccc; border-radius: 4px; background: white; color: #222; font-family: Arial, sans-serif; width: 100%; }
+.nums-row input[readonly] { background: #f0f0f0; color: #777; }
+.desc-extra { margin-top: 6px; }
+.desc-extra label { font-size: 10px; color: #777; display: block; margin-bottom: 2px; }
+.desc-extra input { font-size: 11px; padding: 4px 6px; border: 0.5px solid #ccc; border-radius: 4px; background: white; color: #222; font-family: Arial, sans-serif; width: 100%; }
+.add-row-btn { font-size: 11px; padding: 5px 10px; margin-top: 8px; cursor: pointer; background: white; border: 0.5px solid #ccc; border-radius: 8px; color: #777; font-family: Arial, sans-serif; width: 100%; }
+.gen-btn { padding: 10px 16px; background: #1a5f3f; color: white; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; font-family: Arial, sans-serif; font-weight: 500; width: 100%; }
+.gen-btn:hover { background: #154e33; }
+.gen-btn:disabled { background: #888; cursor: wait; }
+.gen-btn.secondary { background: #2d7a5a; margin-top: 6px; }
+.last-box { background: #e8f5ee; border: 1px solid #a8d5b8; border-radius: 8px; padding: 10px 12px; font-size: 11px; color: #1a5f3f; display: none; line-height: 1.8; }
+.last-box strong { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 3px; color: #555; }
+
+.fac-preview { flex: 1; }
+.invoice { background: white; padding: 40px 44px; border: 1px solid #ccc; border-radius: 4px; font-family: Arial, sans-serif; color: #000; font-size: 14px; }
+.inv-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; border-bottom: 3px solid #1a5f3f; padding-bottom: 18px; }
+.inv-from .name { font-size: 19px; font-weight: bold; }
+.inv-from .location, .inv-from .contact { font-size: 13px; color: #444; margin-top: 3px; }
+.inv-meta { text-align: right; }
+.inv-meta .inv-label { font-size: 28px; font-weight: bold; color: #1a5f3f; letter-spacing: 2px; }
+.inv-meta table { margin-top: 8px; font-size: 13px; }
+.inv-meta td { padding: 2px 6px; }
+.inv-meta td:first-child { color: #555; }
+.inv-meta td:last-child { font-weight: bold; text-align: right; }
+.inv-to { margin-bottom: 20px; }
+.inv-to .to-label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.05em; }
+.inv-to .to-name { font-size: 16px; font-weight: bold; margin-top: 3px; }
+.inv-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+.inv-table th { background: #1a5f3f !important; print-color-adjust: exact; -webkit-print-color-adjust: exact; color: white !important; padding: 9px 10px; text-align: left; font-size: 13px; font-weight: normal; text-transform: uppercase; letter-spacing: 0.04em; }
+.inv-table th:nth-child(2), .inv-table th:nth-child(3), .inv-table th:nth-child(4) { text-align: right; }
+.inv-table td { padding: 8px 10px; border-bottom: 0.5px solid #e0e0e0; font-size: 13px; vertical-align: top; }
+.inv-table td:nth-child(2), .inv-table td:nth-child(3), .inv-table td:nth-child(4) { text-align: right; }
+.inv-total-row { display: flex; justify-content: flex-end; margin-bottom: 20px; }
+.inv-total-box { background: #1a5f3f !important; print-color-adjust: exact; -webkit-print-color-adjust: exact; color: white !important; padding: 8px 18px; border-radius: 4px; display: flex; gap: 24px; align-items: center; }
+.inv-total-box .t-label { font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; }
+.inv-total-box .t-amount { font-weight: bold; font-size: 18px; }
+.inv-footer { border-top: 1px solid #ddd; padding-top: 12px; font-size: 13px; color: #444; }
+.inv-footer .zelle { font-weight: bold; color: #1a5f3f; }
+.inv-footer .thanks { margin-top: 5px; font-style: italic; color: #777; }
+#invoice-clone-wrap { position: absolute; left: -9999px; top: 0; width: 794px; background: white; padding: 40px 48px; font-family: Arial, sans-serif; color: #000; font-size: 14px; }
+
+/* ══════════════════════════════════════════════
+   SHARED MODALS
+══════════════════════════════════════════════ */
+.modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 200; align-items: center; justify-content: center; }
+.modal-bg.open { display: flex; }
+.modal { background: white; border-radius: 14px; padding: 24px; width: 480px; max-width: 95vw; max-height: 92vh; overflow-y: auto; }
+.modal h2 { font-size: 16px; font-weight: 600; margin-bottom: 6px; color: #1a5f3f; }
+.modal-hint { font-size: 12px; color: #777; margin-bottom: 14px; line-height: 1.5; }
+.mfield { margin-bottom: 12px; }
+.mfield label { display: block; font-size: 11px; color: #777; margin-bottom: 3px; }
+.mfield input, .mfield select, .mfield textarea { width: 100%; font-size: 13px; padding: 7px 10px; border: 0.5px solid #ccc; border-radius: 8px; background: white; color: #222; font-family: Arial, sans-serif; }
+.mfield textarea { resize: vertical; min-height: 50px; }
+.mfield input[type=password] { letter-spacing: 2px; }
+.mrow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.modal-actions { display: flex; gap: 10px; margin-top: 16px; }
+.m-save { flex: 1; background: #1a5f3f; color: white; border: none; border-radius: 8px; padding: 9px; font-size: 14px; cursor: pointer; font-family: Arial, sans-serif; font-weight: 600; }
+.m-save:hover { background: #154e33; }
+.m-cancel { flex: 1; background: white; color: #555; border: 0.5px solid #ccc; border-radius: 8px; padding: 9px; font-size: 14px; cursor: pointer; font-family: Arial, sans-serif; }
+.key-status { font-size: 11px; padding: 7px 10px; border-radius: 6px; margin-bottom: 12px; }
+.key-status.ok { background: #e8f5ee; color: #1a5f3f; }
+.key-status.missing { background: #fef3ec; color: #c0622a; }
+.prefilled { border-color: #1a5f3f !important; background: #f0faf5 !important; }
+
+/* Upload */
+.upload-zone { border: 2px dashed #a8d5b8; border-radius: 12px; padding: 26px; text-align: center; cursor: pointer; background: #f7fbf8; margin-bottom: 12px; }
+.upload-zone:hover, .upload-zone.dragover { background: #e8f5ee; border-color: #1a5f3f; }
+.upload-zone .uz-icon { font-size: 28px; margin-bottom: 6px; }
+.upload-zone p { font-size: 13px; color: #555; }
+.upload-zone small { font-size: 11px; color: #aaa; }
+.upload-queue { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; margin-bottom: 10px; }
+.uq-item { background: #f7fbf8; border: 0.5px solid #dde8e2; border-radius: 8px; padding: 8px 12px; display: flex; align-items: center; gap: 8px; }
+.uq-name { font-size: 12px; color: #333; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.uq-status { font-size: 11px; color: #888; white-space: nowrap; }
+.uq-status.done { color: #1a5f3f; font-weight: 600; }
+.uq-status.err { color: #c0622a; }
+.uq-status.saved { color: #1a5f3f; font-style: italic; }
+.uq-edit { background: none; border: 0.5px solid #ccc; border-radius: 5px; cursor: pointer; font-size: 11px; padding: 2px 7px; color: #555; font-family: Arial, sans-serif; }
+.bulk-actions { display: flex; gap: 8px; margin-bottom: 4px; }
+.bulk-btn { flex: 1; padding: 8px; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: Arial, sans-serif; }
+.bulk-btn.primary { background: #1a5f3f; color: white; }
+.bulk-btn.primary:hover { background: #154e33; }
+.bulk-btn.primary:disabled { background: #888; cursor: wait; }
+.bulk-btn.secondary { background: white; color: #555; border: 0.5px solid #ccc; }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="topbar-brand">
+      <div class="sub">Maria Jose Gomez</div>
+      <h1>Sistema de Facturas</h1>
+    </div>
+    <button class="tab active" id="tab-gestor" onclick="showPage('gestor')">📋 Gestor</button>
+    <button class="tab" id="tab-facturador" onclick="showPage('facturador')">✏️ Nueva Factura</button>
+  </div>
+  <div class="topbar-right">
+    <button class="key-btn" onclick="openKeyModal()">🔑 API Key</button>
+    <button class="tb-btn outline" onclick="openUpload()">📂 Subir PDFs</button>
+    <button class="tb-btn outline" onclick="importJSONPrompt()">📂 Cargar datos</button>
+    <button class="tb-btn" onclick="exportJSON()">💾 Guardar datos</button>
+  </div>
+</div>
+
+<!-- ══ GESTOR PAGE ══ -->
+<div class="page active" id="page-gestor">
+  <div class="notice notice-info" id="load-notice">
+    <span>💡 Cargá tu archivo <b>facturas.json</b> para ver tus facturas guardadas.</span>
+    <button class="notice-btn" onclick="importJSONPrompt()">📂 Cargar datos</button>
+  </div>
+  <div class="notice" id="save-notice" style="display:none">
+    <span>⚠️ <b>Cambios sin guardar.</b></span>
+    <button class="notice-btn" onclick="exportJSON()">💾 Guardar datos</button>
+  </div>
+  <input type="file" id="json-file-input" accept=".json" style="display:none">
+
+  <div class="summary">
+    <div class="card"><div class="c-label">Total cobrado</div><div class="c-value" id="s-cobrado">$0.00</div><div class="c-sub" id="s-cobrado-n">0 facturas</div></div>
+    <div class="card warn"><div class="c-label">Pendiente de cobro</div><div class="c-value" id="s-pendiente">$0.00</div><div class="c-sub" id="s-pendiente-n">0 facturas</div></div>
+    <div class="card neutral"><div class="c-label">Total facturado</div><div class="c-value" id="s-total">$0.00</div><div class="c-sub" id="s-total-n">0 facturas</div></div>
+    <div class="card neutral"><div class="c-label">Horas totales</div><div class="c-value" id="s-horas">0</div><div class="c-sub">horas trabajadas</div></div>
+  </div>
+
+  <div class="filters">
+    <div><label>Cliente</label><select id="fil-client" onchange="renderGestor()"><option value="">Todos</option></select></div>
+    <div><label>Estado</label>
+      <select id="fil-status" onchange="renderGestor()">
+        <option value="">Todos</option><option value="pending">Pendiente</option><option value="paid">Pagada</option>
+      </select>
+    </div>
+    <div><label>Desde</label><input type="date" id="fil-from" onchange="renderGestor()"></div>
+    <div><label>Hasta</label><input type="date" id="fil-to" onchange="renderGestor()"></div>
+    <button class="filter-reset" onclick="resetFilters()">Limpiar filtros</button>
+  </div>
+
+  <div class="month-section">
+    <h2>Resumen por mes</h2>
+    <div class="month-grid" id="month-pills"></div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th onclick="sortBy('num')">N° Factura <span id="sort-num"></span></th>
+        <th onclick="sortBy('date')">Fecha <span id="sort-date">▼</span></th>
+        <th onclick="sortBy('client')">Cliente <span id="sort-client"></span></th>
+        <th onclick="sortBy('hours')">Horas <span id="sort-hours"></span></th>
+        <th onclick="sortBy('rate')">Rate <span id="sort-rate"></span></th>
+        <th onclick="sortBy('total')">Total <span id="sort-total"></span></th>
+        <th class="no-sort">Estado</th>
+        <th class="no-sort">Acciones</th>
+      </tr></thead>
+      <tbody id="inv-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ══ FACTURADOR PAGE ══ -->
+<div class="page" id="page-facturador">
+  <div class="fac-wrap">
+    <div class="fac-panel">
+      <div class="fac-section">
+        <h3>Datos del emisor</h3>
+        <div class="f-field"><label>Nombre</label><input id="f-name" value="Maria Jose Gomez"></div>
+        <div class="f-field"><label>Ciudad</label><input id="f-city" value="Hallandale Beach"></div>
+        <div class="f-field"><label>Teléfono</label><input id="f-phone" value="(786) 681-6746"></div>
+        <div class="f-field"><label>Email</label><input id="f-email" value="mariajoseegomez@gmail.com"></div>
+      </div>
+      <div class="fac-section">
+        <h3>Factura</h3>
+        <div class="f-field"><label>N° Factura</label><input id="f-num" value="00156"></div>
+        <div class="f-field"><label>Fecha</label><input id="f-date" type="date" value="2026-06-01"></div>
+        <div class="f-field"><label>Cliente (To)</label><input id="f-to" value="Mitchell J Howard CPA PA"></div>
+      </div>
+      <div class="fac-section">
+        <h3>Servicios</h3>
+        <div id="rows-container"></div>
+        <button class="add-row-btn" onclick="addRow()">+ Agregar servicio</button>
+      </div>
+      <div class="fac-section">
+        <h3>Pago</h3>
+        <div class="f-field"><label>Zelle email</label><input id="f-zelle" value="mariajoseegomez@gmail.com"></div>
+      </div>
+      <button class="gen-btn" id="pdf-btn" onclick="generateAndSave()">🖨️ Generar PDF y Guardar</button>
+      <div class="last-box" id="last-box">
+        <strong>⏱ Última factura generada</strong>
+        <span id="last-info"></span>
+      </div>
+    </div>
+
+    <div class="fac-preview">
+      <div class="invoice" id="invoice-el">
+        <div class="inv-header">
+          <div class="inv-from">
+            <div class="name" id="p-name">Maria Jose Gomez</div>
+            <div class="location" id="p-city">Hallandale Beach</div>
+            <div class="contact">Phone: <span id="p-phone">(786) 681-6746</span></div>
+            <div class="contact">Email: <span id="p-email">mariajoseegomez@gmail.com</span></div>
+          </div>
+          <div class="inv-meta">
+            <div class="inv-label">INVOICE</div>
+            <table><tr><td>Invoice:</td><td id="p-num">00156</td></tr><tr><td>Date:</td><td id="p-date">06/01/2026</td></tr></table>
+          </div>
+        </div>
+        <div class="inv-to">
+          <div class="to-label">To:</div>
+          <div class="to-name" id="p-to">Mitchell J Howard CPA PA</div>
+        </div>
+        <table class="inv-table">
+          <thead><tr><th>Description</th><th>Hours</th><th>Rate</th><th>Amount</th></tr></thead>
+          <tbody id="p-rows"></tbody>
+        </table>
+        <div class="inv-total-row">
+          <div class="inv-total-box"><span class="t-label">Total</span><span class="t-amount" id="p-total">$0.00</span></div>
+        </div>
+        <div class="inv-footer">
+          <div>Please make payment via Zelle: <span class="zelle" id="p-zelle">mariajoseegomez@gmail.com</span></div>
+          <div class="thanks">Thank you for your business!</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="invoice-clone-wrap"></div>
+
+<!-- MODAL: Edit/New invoice -->
+<div class="modal-bg" id="modal-bg">
+  <div class="modal">
+    <h2 id="modal-title">Nueva factura</h2>
+    <p class="modal-hint" id="modal-hint" style="display:none"></p>
+    <div class="mrow">
+      <div class="mfield"><label>N° Factura</label><input id="m-num" placeholder="00157"></div>
+      <div class="mfield"><label>Fecha</label><input id="m-date" type="date"></div>
+    </div>
+    <div class="mfield"><label>Cliente</label><input id="m-client"></div>
+    <div class="mfield"><label>Descripción</label><textarea id="m-desc"></textarea></div>
+    <div class="mrow">
+      <div class="mfield"><label>Horas</label><input id="m-hours" type="text" inputmode="decimal"></div>
+      <div class="mfield"><label>Rate ($/hr)</label><input id="m-rate" type="text" inputmode="decimal" value="30"></div>
+    </div>
+    <div class="mrow">
+      <div class="mfield"><label>Total ($)</label><input id="m-total" readonly style="background:#f5f5f5"></div>
+      <div class="mfield"><label>Estado</label>
+        <select id="m-status"><option value="pending">Pendiente</option><option value="paid">Pagada</option></select>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="m-cancel" onclick="closeModal()">Cancelar</button>
+      <button class="m-save" onclick="saveInvoice()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: API Key -->
+<div class="modal-bg" id="key-bg">
+  <div class="modal">
+    <h2>🔑 API Key de Anthropic</h2>
+    <p class="modal-hint">Se guarda dentro de tu archivo facturas.json. Se usa para leer PDFs automáticamente al importar.</p>
+    <div id="key-current" class="key-status missing">Sin key configurada</div>
+    <div class="mfield"><label>Pegá tu API Key acá</label><input type="password" id="key-input" placeholder="sk-ant-..."></div>
+    <div class="modal-actions">
+      <button class="m-cancel" onclick="closeKeyModal()">Cancelar</button>
+      <button class="m-save" onclick="saveKey()">Guardar key</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Upload PDFs -->
+<div class="modal-bg" id="upload-bg">
+  <div class="modal">
+    <h2>📂 Importar facturas en PDF</h2>
+    <p class="modal-hint" id="upload-hint"></p>
+    <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
+      <div class="uz-icon">📄</div>
+      <p>Hacé clic o arrastrá PDFs acá</p>
+      <small>Podés subir varios a la vez</small>
+    </div>
+    <input type="file" id="file-input" accept=".pdf" multiple style="display:none">
+    <div class="upload-queue" id="upload-queue"></div>
+    <div class="bulk-actions" id="bulk-actions" style="display:none">
+      <button class="bulk-btn primary" id="bulk-save-btn" onclick="saveAllReady()">✅ Guardar todas</button>
+      <button class="bulk-btn secondary" onclick="closeUpload()">Cerrar</button>
+    </div>
+    <div class="modal-actions" id="upload-close-row">
+      <button class="m-cancel" onclick="closeUpload()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════
+let invoices = [], dirty = false, apiKey = '';
+let editingId = null, activeMonth = null, pendingQueueId = null;
+let uploadQueue = [];
+let sortCol = 'date', sortDir = -1;
+
+// Facturador rows
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const YEARS = []; for (let y=2023;y<=2032;y++) YEARS.push(y);
+let facRows = [{ fromM:0, fromY:2026, toM:4, toY:2026, client:'Pintumat LLC', hours:'3.5', rate:'30' }];
+
+// ══════════════════════════════════════════════
+//  NAVIGATION
+// ══════════════════════════════════════════════
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  document.getElementById('tab-'+name).classList.add('active');
+}
+
+// ══════════════════════════════════════════════
+//  PERSISTENCE
+// ══════════════════════════════════════════════
+function markDirty() { dirty=true; document.getElementById('save-notice').style.display='flex'; }
+
+function exportJSON() {
+  const blob = new Blob([JSON.stringify({invoices,apiKey},null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='facturas.json'; a.click();
+  dirty=false; document.getElementById('save-notice').style.display='none';
+}
+function importJSONPrompt() { document.getElementById('json-file-input').click(); }
+document.getElementById('json-file-input').addEventListener('change', function(){
+  const file=this.files[0]; if(!file)return;
+  const r=new FileReader();
+  r.onload=e=>{
+    try {
+      const data=JSON.parse(e.target.result);
+      if(Array.isArray(data)){invoices=data;}
+      else{invoices=data.invoices||[];if(data.apiKey){apiKey=data.apiKey;updateKeyStatus();}}
+      document.getElementById('load-notice').style.display='none';
+      renderGestor();
+    } catch(err){alert('Error al leer el archivo: '+err.message);}
+  };
+  r.readAsText(file); this.value='';
+});
+
+// ══════════════════════════════════════════════
+//  API KEY
+// ══════════════════════════════════════════════
+function getKey(){return apiKey||'';}
+function saveKey(){
+  const val=document.getElementById('key-input').value.trim();
+  if(!val.startsWith('sk-ant-')){alert('La key debe empezar con sk-ant-');return;}
+  apiKey=val; updateKeyStatus(); markDirty(); closeKeyModal();
+}
+function updateKeyStatus(){
+  const k=getKey(),el=document.getElementById('key-current');
+  if(k){el.className='key-status ok';el.textContent='✓ Key: '+k.slice(0,14)+'••••';}
+  else{el.className='key-status missing';el.textContent='Sin key configurada';}
+}
+function openKeyModal(){updateKeyStatus();document.getElementById('key-input').value='';document.getElementById('key-bg').classList.add('open');}
+function closeKeyModal(){document.getElementById('key-bg').classList.remove('open');}
+
+// ══════════════════════════════════════════════
+//  PDF GENERATION
+// ══════════════════════════════════════════════
+async function buildPDFBase64() {
+  const el=document.getElementById('invoice-el');
+  const wrap=document.getElementById('invoice-clone-wrap');
+  wrap.innerHTML=el.innerHTML;
+  wrap.querySelectorAll('th').forEach(th=>{th.style.background='#1a5f3f';th.style.color='white';});
+  const tb=wrap.querySelector('.inv-total-box');if(tb){tb.style.background='#1a5f3f';tb.style.color='white';}
+  const ze=wrap.querySelector('.zelle');if(ze)ze.style.color='#1a5f3f';
+  const la=wrap.querySelector('.inv-label');if(la)la.style.color='#1a5f3f';
+  const canvas=await html2canvas(wrap,{scale:2,useCORS:true,backgroundColor:'#ffffff',width:wrap.offsetWidth,height:wrap.offsetHeight,windowWidth:wrap.offsetWidth});
+  const {jsPDF}=window.jspdf;
+  const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const imgW=190,imgH=(canvas.height/canvas.width)*imgW;
+  // If content taller than one page, scale down to fit
+  const maxH=277;
+  const finalW=imgH>maxH?imgW*(maxH/imgH):imgW;
+  const finalH=imgH>maxH?maxH:imgH;
+  pdf.addImage(canvas.toDataURL('image/png'),'PNG',(210-finalW)/2,10,finalW,finalH);
+  return {pdfBase64:'data:application/pdf;base64,'+btoa(pdf.output()), pdf, filename: buildFilename()};
+}
+
+function buildFilename(){
+  const num=document.getElementById('f-num').value||'00000';
+  const date=document.getElementById('p-date').textContent||'';
+  const dateFmt=date.replace(/\//g,' ');
+  const client=facRows.map(r=>r.client).filter(Boolean)[0]||'Cliente';
+  return 'Invoice '+num+' - '+client+' - '+dateFmt;
+}
+
+async function generateAndSave(){
+  const btn=document.getElementById('pdf-btn');
+  btn.disabled=true; btn.textContent='⏳ Generando...';
+  try {
+    const {pdfBase64, pdf, filename}=await buildPDFBase64();
+    // Download PDF
+    pdf.save(filename+'.pdf');
+    // Save to gestor
+    const num=document.getElementById('f-num').value;
+    const date=document.getElementById('p-date').textContent;
+    const total=document.getElementById('p-total').textContent;
+    const dp=date.split('/');
+    const iso=dp.length===3?dp[2]+'-'+dp[0].padStart(2,'0')+'-'+dp[1].padStart(2,'0'):date;
+    const client=facRows.map(r=>r.client).filter(Boolean)[0]||'';
+    const hours=facRows.map(r=>r.hours).filter(Boolean)[0]||'';
+    const rate=facRows.map(r=>r.rate).filter(Boolean)[0]||'30';
+    const desc=facRows.map(r=>buildDesc(r)).join(' / ');
+    const rec={id:Date.now(),num,date:iso,client,desc,hours,rate,total:parseNum(total.replace('$','')),status:'pending',pdf:pdfBase64};
+    if(!invoices.find(i=>i.num===num)){invoices.push(rec);}
+    else{const ex=invoices.find(i=>i.num===num);ex.pdf=pdfBase64;}
+    markDirty(); renderGestor();
+    // Show last box
+    document.getElementById('last-box').style.display='block';
+    document.getElementById('last-info').innerHTML='📄 Invoice '+num+'<br>💵 '+total+'<br>🏢 '+client+
+      ' &nbsp;<button onclick="viewPDF('+rec.id+')" style="background:#1a5f3f;color:white;border:none;border-radius:5px;padding:2px 8px;font-size:11px;cursor:pointer;font-family:Arial,sans-serif">👁 Ver PDF</button>'+
+      ' &nbsp;<button onclick="showPage(\'gestor\')" style="background:white;color:#1a5f3f;border:1px solid #1a5f3f;border-radius:5px;padding:2px 8px;font-size:11px;cursor:pointer;font-family:Arial,sans-serif">📋 Ver en Gestor</button>';
+    // Auto-increment invoice number
+    const nextNum=String(parseInt(num)+1).padStart(num.length,'0');
+    document.getElementById('f-num').value=nextNum;
+    document.getElementById('p-num').textContent=nextNum;
+  } catch(e){alert('Error: '+e.message);}
+  btn.disabled=false; btn.textContent='🖨️ Generar PDF y Guardar';
+}
+
+// ══════════════════════════════════════════════
+//  GESTOR HELPERS
+// ══════════════════════════════════════════════
+function parseNum(v){const n=parseFloat(String(v||'').replace(',','.'));return isNaN(n)?0:n;}
+function fmtMoney(n){return '$'+parseFloat(n||0).toFixed(2);}
+function dateToISO(d){
+  if(!d)return'';
+  if(/^\d{4}-\d{2}-\d{2}$/.test(d))return d;
+  const p=d.split(/[\/\-\s]/);
+  if(p.length===3){if(p[0].length===4)return p[0]+'-'+p[1].padStart(2,'0')+'-'+p[2].padStart(2,'0');return p[2]+'-'+p[0].padStart(2,'0')+'-'+p[1].padStart(2,'0');}
+  return'';
+}
+function isoToDisplay(d){if(!d)return'';const iso=dateToISO(d);if(!iso)return d;const[y,m,dd]=iso.split('-');return m+'/'+dd+'/'+y;}
+function getMonthKey(d){const iso=dateToISO(d);return iso?iso.slice(0,7):'';}
+function monthLabel(key){if(!key)return'';const[y,m]=key.split('-');return['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][parseInt(m)-1]+' '+y;}
+
+function viewPDF(id){
+  const inv=invoices.find(i=>i.id===id);
+  if(!inv||!inv.pdf)return;
+  const win=window.open('');
+  win.document.write('<html><head><title>Invoice '+inv.num+'</title></head><body style="margin:0;height:100vh"><embed src="'+inv.pdf+'" type="application/pdf" width="100%" height="100%"></body></html>');
+  win.document.close();
+}
+
+function toggleStatus(id){const inv=invoices.find(i=>i.id===id);if(!inv)return;inv.status=inv.status==='paid'?'pending':'paid';markDirty();renderGestor();}
+function deleteInvoice(id){if(!confirm('¿Eliminar esta factura?'))return;invoices=invoices.filter(i=>i.id!==id);markDirty();renderGestor();}
+function editInvoice(id){const inv=invoices.find(i=>i.id===id);if(inv)openModal(inv);}
+function resetFilters(){document.getElementById('fil-client').value='';document.getElementById('fil-status').value='';document.getElementById('fil-from').value='';document.getElementById('fil-to').value='';activeMonth=null;renderGestor();}
+
+function sortBy(col){
+  if(sortCol===col)sortDir*=-1;else{sortCol=col;sortDir=col==='date'?-1:1;}
+  ['num','date','client','hours','rate','total'].forEach(c=>{const el=document.getElementById('sort-'+c);if(el)el.textContent=c===sortCol?(sortDir===1?'▲':'▼'):'';});
+  renderGestor();
+}
+function getSorted(list){
+  return [...list].sort((a,b)=>{
+    if(sortCol==='date'){return sortDir*(dateToISO(a.date)||'').localeCompare(dateToISO(b.date)||'');}
+    if(sortCol==='num'){return sortDir*(a.num||'').localeCompare(b.num||'');}
+    if(sortCol==='client'){return sortDir*(a.client||'').toLowerCase().localeCompare((b.client||'').toLowerCase());}
+    if(sortCol==='hours'){return sortDir*(parseNum(a.hours)-parseNum(b.hours));}
+    if(sortCol==='rate'){return sortDir*(parseNum(a.rate)-parseNum(b.rate));}
+    if(sortCol==='total'){return sortDir*(parseNum(a.total)-parseNum(b.total));}
+    return 0;
+  });
+}
+
+// ══════════════════════════════════════════════
+//  GESTOR RENDER
+// ══════════════════════════════════════════════
+function updateSummary(list){
+  const paid=list.filter(i=>i.status==='paid'),pend=list.filter(i=>i.status==='pending');
+  document.getElementById('s-cobrado').textContent=fmtMoney(paid.reduce((a,i)=>a+parseNum(i.total),0));
+  document.getElementById('s-cobrado-n').textContent=paid.length+' factura'+(paid.length!==1?'s':'');
+  document.getElementById('s-pendiente').textContent=fmtMoney(pend.reduce((a,i)=>a+parseNum(i.total),0));
+  document.getElementById('s-pendiente-n').textContent=pend.length+' factura'+(pend.length!==1?'s':'');
+  document.getElementById('s-total').textContent=fmtMoney(list.reduce((a,i)=>a+parseNum(i.total),0));
+  document.getElementById('s-total-n').textContent=list.length+' factura'+(list.length!==1?'s':'');
+  const h=list.reduce((a,i)=>a+parseNum(i.hours),0);
+  document.getElementById('s-horas').textContent=h%1===0?h:h.toFixed(1);
+}
+function updateClientFilter(){
+  const sel=document.getElementById('fil-client'),cur=sel.value;
+  const clients=[...new Set(invoices.map(i=>i.client).filter(Boolean))].sort();
+  sel.innerHTML='<option value="">Todos</option>';
+  clients.forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;if(c===cur)o.selected=true;sel.appendChild(o);});
+}
+function updateMonthPills(){
+  const months=[...new Set(invoices.map(i=>getMonthKey(i.date)).filter(Boolean))].sort().reverse();
+  const container=document.getElementById('month-pills');container.innerHTML='';
+  if(!months.length){container.innerHTML='<span style="color:#aaa;font-size:12px">Sin datos aún</span>';return;}
+  months.forEach(key=>{
+    const inv=invoices.filter(i=>getMonthKey(i.date)===key);
+    const pill=document.createElement('button');
+    pill.className='month-pill'+(activeMonth===key?' active':'');
+    pill.textContent=monthLabel(key)+' — '+fmtMoney(inv.reduce((a,i)=>a+parseNum(i.total),0));
+    pill.onclick=()=>{activeMonth=activeMonth===key?null:key;renderGestor();};
+    container.appendChild(pill);
+  });
+}
+function getFiltered(){
+  const client=document.getElementById('fil-client').value,status=document.getElementById('fil-status').value;
+  const from=document.getElementById('fil-from').value,to=document.getElementById('fil-to').value;
+  return invoices.filter(i=>{
+    if(client&&i.client!==client)return false;
+    if(status&&i.status!==status)return false;
+    const iso=dateToISO(i.date);
+    if(from&&iso&&iso<from)return false;
+    if(to&&iso&&iso>to)return false;
+    if(activeMonth&&getMonthKey(i.date)!==activeMonth)return false;
+    return true;
+  });
+}
+function renderGestor(){
+  updateClientFilter();updateMonthPills();
+  const filtered=getFiltered();updateSummary(filtered);
+  const tbody=document.getElementById('inv-tbody');tbody.innerHTML='';
+  if(!filtered.length){const tr=document.createElement('tr');tr.className='empty-row';tr.innerHTML='<td colspan="8">No hay facturas. Generá una nueva o importá PDFs.</td>';tbody.appendChild(tr);return;}
+  getSorted(filtered).forEach(inv=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td><strong>${inv.num||'—'}</strong></td><td>${isoToDisplay(inv.date)||'—'}</td><td>${inv.client||'—'}</td><td>${inv.hours||'—'}</td><td>${inv.rate?'$'+parseFloat(inv.rate).toFixed(2):'—'}</td><td><strong>${fmtMoney(inv.total)}</strong></td>
+    <td><span class="badge ${inv.status}" onclick="toggleStatus(${inv.id})">${inv.status==='paid'?'✓ Pagada':'⏳ Pendiente'}</span></td>
+    <td><div class="actions">
+      ${inv.pdf?`<button class="act-btn view" onclick="viewPDF(${inv.id})">👁</button>`:''}
+      <button class="act-btn" onclick="editInvoice(${inv.id})">✏️</button>
+      <button class="act-btn del" onclick="deleteInvoice(${inv.id})">🗑</button>
+    </div></td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+// ══════════════════════════════════════════════
+//  INVOICE FORM MODAL
+// ══════════════════════════════════════════════
+function openModal(inv=null,prefill=null,filename='',queueId=null){
+  editingId=inv?inv.id:null; pendingQueueId=queueId;
+  document.getElementById('modal-title').textContent=inv?'Editar factura':'Nueva factura';
+  const hint=document.getElementById('modal-hint');
+  if(filename){hint.textContent='📄 Datos de: '+filename;hint.style.display='block';}else hint.style.display='none';
+  const src=inv||prefill||{};
+  document.getElementById('m-num').value=src.num||'';
+  document.getElementById('m-date').value=src.date?dateToISO(src.date):'';
+  document.getElementById('m-client').value=src.client||'';
+  document.getElementById('m-desc').value=src.desc||'';
+  document.getElementById('m-hours').value=src.hours||'';
+  document.getElementById('m-rate').value=src.rate||'30';
+  document.getElementById('m-status').value=src.status||'pending';
+  if(prefill&&!inv)['m-num','m-client','m-desc','m-hours','m-rate'].forEach(fid=>{const el=document.getElementById(fid);if(el.value){el.classList.add('prefilled');el.addEventListener('input',()=>el.classList.remove('prefilled'),{once:true});}});
+  calcModalTotal();
+  document.getElementById('modal-bg').classList.add('open');
+}
+function closeModal(){
+  document.getElementById('modal-bg').classList.remove('open');
+  if(pendingQueueId){setTimeout(()=>document.getElementById('upload-bg').classList.add('open'),200);pendingQueueId=null;}
+}
+function calcModalTotal(){
+  const h=parseNum(document.getElementById('m-hours').value),r=parseNum(document.getElementById('m-rate').value);
+  document.getElementById('m-total').value=h*r>0?fmtMoney(h*r):'';
+}
+document.getElementById('m-hours').addEventListener('input',calcModalTotal);
+document.getElementById('m-rate').addEventListener('input',calcModalTotal);
+function saveInvoice(){
+  const num=document.getElementById('m-num').value.trim(),date=document.getElementById('m-date').value;
+  if(!num){alert('Ingresá el número de factura');return;}
+  if(!date){alert('Ingresá la fecha');return;}
+  const hours=document.getElementById('m-hours').value,rate=document.getElementById('m-rate').value;
+  const total=parseNum(hours)*parseNum(rate)||parseNum(document.getElementById('m-total').value.replace('$',''));
+  const rec={num,date,client:document.getElementById('m-client').value.trim(),desc:document.getElementById('m-desc').value.trim(),hours,rate,total,status:document.getElementById('m-status').value};
+  if(editingId){const inv=invoices.find(i=>i.id===editingId);if(inv)Object.assign(inv,rec);}
+  else{
+    const qitem=pendingQueueId?uploadQueue.find(i=>String(i.id)===String(pendingQueueId)):null;
+    invoices.push({id:Date.now(),...rec,pdf:qitem&&qitem.pdfBase64?qitem.pdfBase64:''});
+  }
+  if(pendingQueueId){
+    const item=uploadQueue.find(i=>String(i.id)===String(pendingQueueId));
+    if(item){item.status='saved';const s=document.getElementById('uqs-'+item.id);if(s){s.className='uq-status saved';s.textContent='✅ Guardada';}const b=document.getElementById('uqb-'+item.id);if(b)b.style.display='none';}
+    updateBulkBtn();
+  }
+  markDirty();renderGestor();
+  document.getElementById('modal-bg').classList.remove('open');
+  if(pendingQueueId){setTimeout(()=>document.getElementById('upload-bg').classList.add('open'),200);pendingQueueId=null;}
+}
+
+// ══════════════════════════════════════════════
+//  UPLOAD PDFs
+// ══════════════════════════════════════════════
+async function readPDFWithClaude(file){
+  const key=getKey(); if(!key)throw new Error('Sin API key — configurala con el botón 🔑');
+  const base64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(file);});
+  const resp=await fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+    body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:400,messages:[{role:'user',content:[
+      {type:'document',source:{type:'base64',media_type:'application/pdf',data:base64}},
+      {type:'text',text:'Extract from this invoice and return ONLY a JSON object, no markdown:\n{"num":"invoice number","date":"YYYY-MM-DD","client":"the company name that appears after bookkeeping: in the description","desc":"full description line","hours":"number or empty","rate":"rate number or empty","total":"total amount as number"}'}
+    ]}]})
+  });
+  if(!resp.ok){const e=await resp.json().catch(()=>({}));throw new Error(e.error?.message||'Error '+resp.status);}
+  const data=await resp.json();
+  return JSON.parse(data.content.map(b=>b.text||'').join('').replace(/```json|```/g,'').trim());
+}
+
+function openUpload(){
+  uploadQueue=[];document.getElementById('upload-queue').innerHTML='';
+  document.getElementById('bulk-actions').style.display='none';
+  document.getElementById('upload-close-row').style.display='flex';
+  document.getElementById('upload-hint').textContent=getKey()?'✅ API Key configurada — los PDFs se leerán automáticamente.':'⚠️ Sin API Key — configurala con 🔑 para lectura automática.';
+  document.getElementById('upload-bg').classList.add('open');
+}
+function closeUpload(){document.getElementById('upload-bg').classList.remove('open');}
+
+const zone=document.getElementById('upload-zone');
+zone.addEventListener('dragover',e=>{e.preventDefault();zone.classList.add('dragover');});
+zone.addEventListener('dragleave',()=>zone.classList.remove('dragover'));
+zone.addEventListener('drop',e=>{e.preventDefault();zone.classList.remove('dragover');handleFiles(e.dataTransfer.files);});
+document.getElementById('file-input').addEventListener('change',function(){handleFiles(this.files);this.value='';});
+
+function handleFiles(files){
+  const arr=Array.from(files).filter(f=>f.name.toLowerCase().endsWith('.pdf'));
+  if(!arr.length)return;
+  document.getElementById('bulk-actions').style.display='flex';
+  document.getElementById('upload-close-row').style.display='none';
+  arr.forEach(file=>{
+    const item={id:Date.now()+Math.random(),file,parsed:null,status:'loading',pdfBase64:''};
+    uploadQueue.push(item);
+    const q=document.getElementById('upload-queue');
+    const div=document.createElement('div');div.className='uq-item';div.id='uq-'+item.id;
+    div.innerHTML=`<span class="uq-name" title="${file.name}">${file.name}</span><span class="uq-status" id="uqs-${item.id}">⏳ Leyendo...</span><button class="uq-edit" id="uqb-${item.id}" style="display:none" onclick="editFromQueue('${item.id}')">✏️ Revisar</button>`;
+    q.appendChild(div);
+    processFile(item);
+  });
+}
+
+async function processFile(item){
+  const statusEl=document.getElementById('uqs-'+item.id),btnEl=document.getElementById('uqb-'+item.id);
+  item.pdfBase64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(item.file);});
+  try{
+    item.parsed=await readPDFWithClaude(item.file);item.status='ready';
+    statusEl.className='uq-status done';statusEl.textContent='✓ '+(item.parsed.client||'')+(item.parsed.date?' · '+item.parsed.date:'');
+    btnEl.style.display='inline';
+  }catch(e){
+    item.status='error';statusEl.className='uq-status err';statusEl.textContent='✗ '+e.message;
+    btnEl.style.display='inline';btnEl.textContent='✏️ Manual';
+  }
+  updateBulkBtn();
+}
+
+function updateBulkBtn(){
+  const ready=uploadQueue.filter(i=>i.status==='ready').length;
+  const btn=document.getElementById('bulk-save-btn');
+  btn.textContent=ready>0?'✅ Guardar '+ready+' factura'+(ready!==1?'s':''):'⏳ Leyendo...';
+  btn.disabled=ready===0;
+}
+
+function saveAllReady(){
+  uploadQueue.filter(i=>i.status==='ready').forEach(item=>{
+    const p=item.parsed;
+    const h=parseNum(p.hours),r=parseNum(p.rate||'30'),total=parseNum(p.total)||h*r;
+    invoices.push({id:Date.now()+Math.random(),num:p.num||'',date:p.date||'',client:p.client||'',desc:p.desc||'',hours:p.hours||'',rate:p.rate||'30',total,status:'pending',pdf:item.pdfBase64||''});
+    const s=document.getElementById('uqs-'+item.id);if(s){s.className='uq-status saved';s.textContent='✅ Guardada';}
+    const b=document.getElementById('uqb-'+item.id);if(b)b.style.display='none';
+    item.status='saved';
+  });
+  markDirty();renderGestor();updateBulkBtn();
+}
+
+function editFromQueue(id){
+  const item=uploadQueue.find(i=>String(i.id)===String(id));if(!item)return;
+  closeUpload();pendingQueueId=id;openModal(null,item.parsed||{},item.file.name,id);
+}
+
+// ══════════════════════════════════════════════
+//  FACTURADOR LOGIC
+// ══════════════════════════════════════════════
+function bindHeader(id,pid){document.getElementById(id).addEventListener('input',function(){document.getElementById(pid).textContent=this.value;});}
+bindHeader('f-name','p-name');bindHeader('f-city','p-city');bindHeader('f-phone','p-phone');
+bindHeader('f-email','p-email');bindHeader('f-to','p-to');bindHeader('f-num','p-num');bindHeader('f-zelle','p-zelle');
+document.getElementById('f-date').addEventListener('input',function(){
+  if(!this.value)return;const[y,m,d]=this.value.split('-');document.getElementById('p-date').textContent=m+'/'+d+'/'+y;
+});
+
+function buildDesc(r){
+  const fm=MONTHS[r.fromM],fy=r.fromY,tm=MONTHS[r.toM],ty=r.toY;
+  const range=(fm===tm&&fy===ty)?fm+' '+fy:fm+' '+fy+' \u2013 '+tm+' '+ty;
+  return range+', bookkeeping'+(r.client?': '+r.client:'');
+}
+function updateInvoiceTable(){
+  const tbody=document.getElementById('p-rows');tbody.innerHTML='';
+  let total=0;
+  facRows.forEach(r=>{
+    const h=parseNum(r.hours),rt=parseNum(r.rate),amt=h*rt;total+=amt;
+    const tr=document.createElement('tr');
+    tr.innerHTML='<td>'+buildDesc(r)+'</td><td>'+(h||'')+'</td><td>'+(rt?'$'+rt.toFixed(2):'')+'</td><td>'+(h||rt?'$'+amt.toFixed(2):'')+'</td>';
+    tbody.appendChild(tr);
+  });
+  for(let i=facRows.length;i<16;i++){const tr=document.createElement('tr');tr.innerHTML='<td>&nbsp;</td><td></td><td></td><td></td>';tbody.appendChild(tr);}
+  document.getElementById('p-total').textContent='$'+total.toFixed(2);
+  updateRowTotals();
+}
+function updateRowTotals(){
+  facRows.forEach((r,i)=>{const el=document.querySelector('[data-total="'+i+'"]');if(el)el.value='$'+(parseNum(r.hours)*parseNum(r.rate)).toFixed(2);});
+}
+function monthSelect(val,idx,field){
+  let s='<select data-row="'+idx+'" data-field="'+field+'">';
+  MONTHS.forEach((m,i)=>s+='<option value="'+i+'"'+(i==val?' selected':'')+'>'+m+'</option>');
+  return s+'</select>';
+}
+function yearSelect(val,idx,field){
+  let s='<select data-row="'+idx+'" data-field="'+field+'">';
+  YEARS.forEach(y=>s+='<option value="'+y+'"'+(y==val?' selected':'')+'>'+y+'</option>');
+  return s+'</select>';
+}
+function renderFacRows(){
+  const c=document.getElementById('rows-container');c.innerHTML='';
+  facRows.forEach((r,i)=>{
+    const amt=(parseNum(r.hours)*parseNum(r.rate)).toFixed(2);
+    const div=document.createElement('div');div.className='service-row';
+    div.innerHTML=`
+      ${facRows.length>1?'<button class="srow-remove" data-remove="'+i+'">\u00d7</button>':''}
+      <div class="date-row">
+        <div class="date-group"><label>Desde</label><div class="date-inner">${monthSelect(r.fromM,i,'fromM')}${yearSelect(r.fromY,i,'fromY')}</div></div>
+        <div class="date-group"><label>Hasta</label><div class="date-inner">${monthSelect(r.toM,i,'toM')}${yearSelect(r.toY,i,'toY')}</div></div>
+      </div>
+      <div class="desc-extra"><label>Cliente / empresa</label><input type="text" data-row="${i}" data-field="client" value="${r.client}" placeholder="ej: Pintumat LLC"></div>
+      <div class="nums-row">
+        <div><label>Horas (ej: 1.5)</label><input type="text" inputmode="decimal" data-row="${i}" data-field="hours" value="${r.hours}" placeholder="0"></div>
+        <div><label>Rate ($/hr)</label><input type="text" inputmode="decimal" data-row="${i}" data-field="rate" value="${r.rate}"></div>
+        <div><label>Total</label><input type="text" readonly data-total="${i}" value="$${amt}"></div>
+      </div>`;
+    c.appendChild(div);
+  });
+  c.querySelectorAll('select[data-row]').forEach(sel=>sel.addEventListener('change',function(){facRows[parseInt(this.dataset.row)][this.dataset.field]=parseInt(this.value);updateInvoiceTable();}));
+  c.querySelectorAll('input[data-row][data-field]').forEach(inp=>inp.addEventListener('input',function(){facRows[parseInt(this.dataset.row)][this.dataset.field]=this.value;updateInvoiceTable();}));
+  c.querySelectorAll('button[data-remove]').forEach(btn=>btn.addEventListener('click',function(){facRows.splice(parseInt(this.dataset.remove),1);renderFacRows();updateInvoiceTable();}));
+  updateInvoiceTable();
+}
+function addRow(){const last=facRows[facRows.length-1];facRows.push({fromM:last.toM,fromY:last.toY,toM:last.toM,toY:last.toY,client:'',hours:'',rate:'30'});renderFacRows();}
+
+// Modal close on bg click
+document.getElementById('modal-bg').addEventListener('click',function(e){if(e.target===this)closeModal();});
+document.getElementById('key-bg').addEventListener('click',function(e){if(e.target===this)closeKeyModal();});
+document.getElementById('upload-bg').addEventListener('click',function(e){if(e.target===this)closeUpload();});
+
+// Init
+renderFacRows();
+renderGestor();
+</script>
+</body>
+</html>
